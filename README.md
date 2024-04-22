@@ -23,7 +23,8 @@ This repository contains a PDF Summarization Web Application that allows users t
 - **Backend**: Node.js with Express
 - **Language Models**: Ollama, GPT-3.5
 - **WebSockets**: For real-time interactions
-- **PDF Text Extraction**: pdfjs (For handling PDF documents).
+- **File Handling**: Multer (for file uploads)
+- **PDF Text Extraction**: pdf-parse (for extracting text from PDF files)
 
 ## Setup and Installation
 
