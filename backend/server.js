@@ -21,13 +21,13 @@ app.use(express.urlencoded({ extended: true }));
 
 const upload = multer({ dest: 'uploads/' });
 
-const openai = new OpenAIApi({ apiKey: process.env.OPENAI_API_KEY });
+const openai = new OpenAIApi({ apiKey: 'your-api-key' });
 
 async function summarizeWithOLLaMA(text) {
     try {
         const response = await axios.post('http://localhost:11434/generate', {
-            model: 'openllama',
-            prompt: text,
+            model: 'llama2:latest',
+            prompt: `Summarize the following text: ${text}`,
             max_tokens: 300,
         });
         return response.data;
@@ -38,35 +38,51 @@ async function summarizeWithOLLaMA(text) {
 }
 
 // Endpoint to handle file uploads and summarization
-app.post('/upload', upload.single('pdf'), async (req, res) => {
-    const file = req.file;
-    if (file) {
-        try {          
-            const pdfBuffer = fs.readFileSync(file.path);
-            const pdfData = await pdfParse(pdfBuffer);
-            const pdfText = pdfData.text;
-           
-            const gptSummaryResponse = await openai.createCompletion({
-                model: 'text-davinci-003',
-                prompt: `Summarize the following text: ${pdfText}`,
-                max_tokens: 300,
-            });
-            const summary1 = gptSummaryResponse.data.choices[0].text.trim();
-            
-            const summary2 = await summarizeWithOLLaMA(pdfText);
-            
-            res.json({
-                summary1,
-                summary2,
-            });
-        } catch (error) {
-            console.error('Summarization error:', error);
-            res.status(500).json({ error: 'Summarization failed' });
-        }
-    } else {
-        res.status(400).json({ error: 'File upload failed' });
-    }
-});
+// app.post('/upload', upload.single('pdf'), async (req, res) => {
+//     const file = req.file;
+//     if (!file) {
+//         console.error('File upload failed');
+//         return res.status(400).json({ error: 'File upload failed' });
+//     }
+
+//     try {
+//         // Read and parse the PDF file
+//         const pdfBuffer = fs.readFileSync(file.path);
+//         const pdfData = await pdfParse(pdfBuffer);
+//         const pdfText = pdfData.text;
+
+//         // Initialize the response object
+//         let response = {
+//             summary1: null,
+//             summary2: null,
+//         };
+
+//         // Attempt summarization with GPT-3.5
+//         try {
+//             const gptSummaryResponse = await openai.createCompletion({
+//                 model: 'gpt-3.5-turbo',
+//                 prompt: `Summarize the following text: ${pdfText}`,
+//                 max_tokens: 300,
+//             });
+//             response.summary1 = gptSummaryResponse.data.choices[0].text.trim();
+//         } catch (gptError) {
+//             console.error('GPT-3.5 summarization error:', gptError);
+//         }
+
+//         // Attempt summarization with OLLaMA
+//         try {
+//             response.summary2 = await summarizeWithOLLaMA(pdfText);
+//         } catch (ollamaError) {
+//             console.error('OLLaMA summarization error:', ollamaError);
+//         }
+
+//         // Send the response object
+//         res.json(response);
+//     } catch (error) {
+//         console.error('An unexpected error occurred:', error);
+//         res.status(500).json({ error: 'An unexpected error occurred' });
+//     }
+// });
 
 wss.on('connection', (ws) => {
     console.log('WebSocket connection established');
@@ -76,24 +92,33 @@ wss.on('connection', (ws) => {
         if (data.type === 'pdfText') {
             const pdfText = data.text;
             
-            try {                
-                const gptSummaryResponse = await openai.createCompletion({
-                    model: 'text-davinci-003',
+            // Initialize the response object with null values
+            let response = {
+                summary1: null,
+                summary2: null,
+            };
+            
+            // Handle summarization with GPT-3.5
+            try {
+                const gptSummaryResponse = await openai.completions.create({
+                    model: 'gpt-3.5-turbo',
                     prompt: `Summarize the following text: ${pdfText}`,
                     max_tokens: 300,
                 });
-                const summary1 = gptSummaryResponse.data.choices[0].text.trim();
-                               
-                const summary2 = await summarizeWithOLLaMA(pdfText);
-                               
-                ws.send(JSON.stringify({
-                    summary1,
-                    summary2,
-                }));
-            } catch (error) {
-                console.error('Summarization error:', error);
-                ws.send(JSON.stringify({ error: 'Summarization failed' }));
+                response.summary1 = gptSummaryResponse.data.choices[0].text.trim();
+            } catch (gptError) {
+                console.error('GPT-3.5 summarization error:', gptError);
             }
+            
+            // Handle summarization with OLLaMA
+            try {
+                response.summary2 = await summarizeWithOLLaMA(pdfText);
+            } catch (ollamaError) {
+                console.error('OLLaMA summarization error:', ollamaError);
+            }
+            
+            // Send the response object
+            ws.send(JSON.stringify(response));
         }
     });
     
@@ -101,6 +126,7 @@ wss.on('connection', (ws) => {
         console.log('WebSocket connection closed');
     });
 });
+
 
 const PORT = 4000; 
 server.listen(PORT, () => {

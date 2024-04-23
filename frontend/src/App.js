@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { pdfjs } from 'react-pdf';
 import { AppBar, Toolbar, Typography, Container, Box } from '@mui/material';
 import ChatArea from './ChatArea';
+const retryRequest = require('./utils');
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
@@ -11,7 +12,7 @@ function App() {
     const [webSocket, setWebSocket] = useState(null);
 
     useEffect(() => {
-        
+
         const ws = new WebSocket('ws://localhost:4000');
 
         ws.onopen = () => {
@@ -41,39 +42,44 @@ function App() {
 
     const handlePdfUpload = (event) => {
         const file = event.target.files[0];
-        if (file) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                const arrayBuffer = e.target.result;
-
-                const loadingTask = pdfjs.getDocument(arrayBuffer);
-                loadingTask.promise.then((pdf) => {
-                    const numPages = pdf.numPages;
-                    const textPromises = [];
-                    for (let i = 1; i <= numPages; i++) {
-                        textPromises.push(pdf.getPage(i).then((page) => {
-                            return page.getTextContent().then((textContent) => {
-                                const text = textContent.items.map((item) => item.str).join('');
-                                return text;
-                            });
-                        }));
-                    }
-
-                    Promise.all(textPromises).then((texts) => {
-                        const fullText = texts.join('\n');
-
-                        if (webSocket) {
-                            const message = {
-                                type: 'pdfText',
-                                text: fullText,
-                            };
-                            webSocket.send(JSON.stringify(message));
-                        }
-                    });
-                });
-            };
-            reader.readAsArrayBuffer(file);
+        if (!file) {
+            console.error('No file selected.');
+            return;
         }
+
+        const reader = new FileReader();
+        reader.onload = async (e) => {
+            const arrayBuffer = e.target.result;
+
+            try {
+                const pdf = await pdfjs.getDocument(arrayBuffer).promise;
+                const numPages = pdf.numPages;
+
+                const textPromises = [];
+                for (let i = 1; i <= numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const text = textContent.items.map((item) => item.str).join('');
+                    textPromises.push(text);
+                }
+
+                const texts = await Promise.all(textPromises);
+                const fullText = texts.join('\n');
+
+                // Send the extracted text through WebSocket
+                if (webSocket) {
+                    const message = {
+                        type: 'pdfText',
+                        text: fullText,
+                    };
+                    webSocket.send(JSON.stringify(message));
+                }
+            } catch (error) {
+                console.error('Error during PDF processing:', error);
+            }
+        };
+
+        reader.readAsArrayBuffer(file);
     };
 
     return (
