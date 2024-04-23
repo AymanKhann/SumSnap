@@ -105,8 +105,8 @@ function App() {
 
                 {/* Display Areas */}
                 <Box mt={4} display="flex" justifyContent="space-between">
-                    <ChatArea title="Summary from Ollama" content={summary1} />
-                    <ChatArea title="Summary from ChatGPT" content={summary2} />
+                    <ChatArea title="Summary from GPT-3.5" content={summary1} />
+                    <ChatArea title="Summary from OLlama" content={summary2} />
                 </Box>
             </Container>
         </div>
