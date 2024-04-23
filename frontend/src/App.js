@@ -9,51 +9,54 @@ function App() {
     const [summary1, setSummary1] = useState('');
     const [summary2, setSummary2] = useState('');
     const [webSocket, setWebSocket] = useState(null);
+    const [loading, setLoading] = useState(false);
 
     useEffect(() => {
-
         const ws = new WebSocket('ws://localhost:4000');
-
+        setWebSocket(ws);
+    
         ws.onopen = () => {
             console.log('Connected to WebSocket');
         };
-
+    
         ws.onmessage = (event) => {
+            setLoading(false);
             const data = JSON.parse(event.data);
             setSummary1(data.summary1);
             setSummary2(data.summary2);
         };
-
+    
         ws.onerror = (error) => {
             console.error('WebSocket error:', error);
+            setLoading(false);
         };
-
+    
         ws.onclose = () => {
             console.log('WebSocket connection closed');
+            setLoading(false);
         };
-
-        setWebSocket(ws);
-
+    
         return () => {
             ws.close();
         };
     }, []);
-
+    
     const handlePdfUpload = (event) => {
         const file = event.target.files[0];
         if (!file) {
             console.error('No file selected.');
             return;
         }
-
+    
+        setLoading(true); // Set loading state
         const reader = new FileReader();
         reader.onload = async (e) => {
             const arrayBuffer = e.target.result;
-
+    
             try {
                 const pdf = await pdfjs.getDocument(arrayBuffer).promise;
                 const numPages = pdf.numPages;
-
+    
                 const textPromises = [];
                 for (let i = 1; i <= numPages; i++) {
                     const page = await pdf.getPage(i);
@@ -61,10 +64,10 @@ function App() {
                     const text = textContent.items.map((item) => item.str).join('');
                     textPromises.push(text);
                 }
-
+    
                 const texts = await Promise.all(textPromises);
                 const fullText = texts.join('\n');
-
+    
                 // Send the extracted text through WebSocket
                 if (webSocket) {
                     const message = {
@@ -75,12 +78,13 @@ function App() {
                 }
             } catch (error) {
                 console.error('Error during PDF processing:', error);
+                setLoading(false);
             }
         };
-
+    
         reader.readAsArrayBuffer(file);
     };
-
+    
     return (
         <div>
             {/* Header */}
@@ -89,7 +93,7 @@ function App() {
                     <Typography variant="h6">SumSnap</Typography>
                 </Toolbar>
             </AppBar>
-
+    
             {/* Main Content */}
             <Container>
                 {/* PDF Upload */}
@@ -101,15 +105,21 @@ function App() {
                         onChange={handlePdfUpload}
                     />
                 </Box>
-
+    
                 {/* Display Areas */}
                 <Box mt={4} display="flex" justifyContent="space-between">
-                    <ChatArea title="Summary from GPT-3.5" content={summary1} />
-                    <ChatArea title="Summary from OLlama" content={summary2} />
+                    {loading ? (
+                        <Typography variant="body1">Loading...</Typography>
+                    ) : (
+                        <>
+                            <ChatArea title="Summary from GPT-3.5" content={summary1} />
+                            <ChatArea title="Summary from OLLaMA" content={summary2} />
+                        </>
+                    )}
                 </Box>
             </Container>
         </div>
     );
+    
 }
-
 export default App;

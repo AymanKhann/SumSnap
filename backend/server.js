@@ -8,6 +8,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const fs = require('fs');
 const pdfParse = require('pdf-parse');
+const { RetrievalQA, OpenAIEmbeddings, LLMChain, PromptTemplate } = require('langchain');
 
 const app = express();
 const server = http.createServer(app);
@@ -21,7 +22,30 @@ app.use(express.urlencoded({ extended: true }));
 
 const upload = multer({ dest: 'uploads/' });
 
-const openai = new OpenAIApi({ apiKey: 'your-api-key' });
+// Initialize OpenAI with your API key
+const openAI = new OpenAIApi({ apiKey: 'your-api-key' });
+
+// Define a PromptTemplate
+const promptTemplate = new PromptTemplate(`
+    Use the following context to answer the question:
+    Context: {context}
+    Question: {question}
+`);
+
+// Initialize the LLMChain with OpenAI and the prompt template
+const llmChain = new LLMChain({
+    llm: openAI,
+    promptTemplate: promptTemplate,
+});
+
+// Define embeddings for document retrieval
+const embeddings = new OpenAIEmbeddings({ apiKey: 'your-api-key' });
+
+// Define the retriever
+const retriever = new RetrievalQA({
+    retriever: embeddings,
+    documentStore: 'path-to-your-document-store',
+});
 
 async function summarizeWithOLLaMA(text) {
     try {
@@ -115,23 +139,26 @@ wss.on('connection', (ws) => {
                 summary2: null,
             };
             
+            // Use LangChain's RetrievalQA for GPT-3.5 summarization
             try {
-                const gptSummaryResponse = await openai.completions.create({
-                    model: 'gpt-3.5-turbo',
-                    prompt: `Summarize the following text: ${pdfText}`,
-                    max_tokens: 300,
+                const context = await retriever.getRelevantDocuments(pdfText);
+                const gptResponse = await llmChain.generate({
+                    context: context.map(doc => doc.text).join('\n'),  // Join context texts
+                    question: pdfText,
                 });
-                response.summary1 = gptSummaryResponse.data.choices[0].text.trim();
+                response.summary1 = gptResponse.text.trim();
             } catch (gptError) {
                 console.error('GPT-3.5 summarization error:', gptError);
             }
             
+            // Use OLLaMA summarization with existing function
             try {
                 response.summary2 = await summarizeWithOLLaMA(pdfText);
             } catch (ollamaError) {
                 console.error('OLLaMA summarization error:', ollamaError);
             }
             
+            // Send the response object
             ws.send(JSON.stringify(response));
         }
     });
@@ -140,6 +167,7 @@ wss.on('connection', (ws) => {
         console.log('WebSocket connection closed');
     });
 });
+
 
 
 const PORT = 4000; 
