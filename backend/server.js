@@ -25,7 +25,7 @@ const openai = new OpenAIApi({ apiKey: 'your-api-key' });
 
 async function summarizeWithOLLaMA(text) {
     try {
-        const response = await axios.post('http://localhost:11434/generate', {
+        const response = await axios.post('http://127.0.0.1:11434/api/generate', {
             model: 'llama2:latest',
             prompt: `Summarize the following text: ${text}`,
             max_tokens: 300,
