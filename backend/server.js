@@ -25,12 +25,30 @@ const openai = new OpenAIApi({ apiKey: 'your-api-key' });
 
 async function summarizeWithOLLaMA(text) {
     try {
-        const response = await axios.post('http://127.0.0.1:11434/api/generate', {
+        // Make the POST request to the API
+        const axiosResponse = await axios.post('http://127.0.0.1:11434/api/generate', {
             model: 'llama2:latest',
             prompt: `Summarize the following text: ${text}`,
             max_tokens: 300,
         });
-        return response.data;
+
+  
+        const rawData = axiosResponse.data;
+        const responseLines = rawData.split('\n');
+
+        let completeSummary = '';
+
+        responseLines.forEach((line) => {
+            try {
+                
+                const lineData = JSON.parse(line);
+                completeSummary += lineData.response;
+            } catch (parseError) {
+                console.error('JSON parsing error for line:', line, parseError);
+            }
+        });
+
+        return completeSummary;
     } catch (error) {
         console.error('OLLaMA summarization error:', error);
         throw error;
@@ -92,13 +110,11 @@ wss.on('connection', (ws) => {
         if (data.type === 'pdfText') {
             const pdfText = data.text;
             
-            // Initialize the response object with null values
             let response = {
                 summary1: null,
                 summary2: null,
             };
             
-            // Handle summarization with GPT-3.5
             try {
                 const gptSummaryResponse = await openai.completions.create({
                     model: 'gpt-3.5-turbo',
@@ -110,14 +126,12 @@ wss.on('connection', (ws) => {
                 console.error('GPT-3.5 summarization error:', gptError);
             }
             
-            // Handle summarization with OLLaMA
             try {
                 response.summary2 = await summarizeWithOLLaMA(pdfText);
             } catch (ollamaError) {
                 console.error('OLLaMA summarization error:', ollamaError);
             }
             
-            // Send the response object
             ws.send(JSON.stringify(response));
         }
     });

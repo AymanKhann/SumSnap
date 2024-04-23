@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { pdfjs } from 'react-pdf';
 import { AppBar, Toolbar, Typography, Container, Box } from '@mui/material';
 import ChatArea from './ChatArea';
-const retryRequest = require('./utils');
 
 pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.js`;
 
